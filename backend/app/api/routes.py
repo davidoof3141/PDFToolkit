@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List
@@ -6,15 +6,19 @@ import shutil
 import uuid
 from pathlib import Path
 from ..services.pdf_service import PDFService
+from ..services.cleanup_service import CleanupService
+from ..core.config import get_settings
+from ..core.security import RequireAPIKey, RequireAdminKey
 
 router = APIRouter()
+settings = get_settings()
 
 # Define a directory to store uploaded files
-UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR = settings.uploads_dir
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 # Define a directory to store generated files
-OUTPUT_DIR = Path("output")
+OUTPUT_DIR = settings.output_dir
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 
@@ -41,7 +45,7 @@ async def version():
 
 
 @router.post("/upload", tags=["pdf"])
-async def upload_pdf(file: UploadFile = File(...)):
+async def upload_pdf(file: UploadFile = File(...), _: bool = RequireAPIKey):
     if file.content_type != "application/pdf":
         raise HTTPException(
             status_code=400, detail="Invalid file type. Only PDFs are allowed."
@@ -84,7 +88,7 @@ async def upload_pdf(file: UploadFile = File(...)):
 
 
 @router.post("/create-pdf", tags=["pdf"])
-async def create_pdf(request: CreatePDFRequest):
+async def create_pdf(request: CreatePDFRequest, _: bool = RequireAPIKey):
     """Create a new PDF from reordered pages."""
     try:
         # Generate unique filename
@@ -167,3 +171,48 @@ async def get_pdf_result(result_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not get PDF info: {e}")
+
+
+# Cleanup endpoints
+@router.get("/cleanup/stats", tags=["cleanup"])
+async def get_cleanup_stats(_: bool = RequireAdminKey):
+    """Get statistics about files in upload and output directories."""
+    try:
+        cleanup_service = CleanupService(UPLOAD_DIR, OUTPUT_DIR)
+        stats = cleanup_service.get_directory_stats()
+        return {
+            "message": "File statistics retrieved successfully",
+            "stats": stats,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not get file stats: {e}")
+
+
+@router.post("/cleanup/old-files", tags=["cleanup"])
+async def cleanup_old_files(max_age_hours: int = 48, _: bool = RequireAdminKey):
+    """Manually trigger cleanup of files older than specified hours."""
+    try:
+        cleanup_service = CleanupService(UPLOAD_DIR, OUTPUT_DIR)
+        cleaned_count = await cleanup_service.cleanup_old_files(max_age_hours)
+        return {
+            "message": f"Cleanup completed successfully",
+            "files_removed": cleaned_count,
+            "max_age_hours": max_age_hours,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not cleanup files: {e}")
+
+
+@router.post("/cleanup/all-files", tags=["cleanup"])
+async def cleanup_all_files(_: bool = RequireAdminKey):
+    """Remove all files from upload and output directories. Use with caution!"""
+    try:
+        cleanup_service = CleanupService(UPLOAD_DIR, OUTPUT_DIR)
+        total_removed = await cleanup_service.cleanup_all_files()
+        return {
+            "message": "All files removed successfully",
+            "files_removed": total_removed,
+            "warning": "All files have been permanently deleted",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not cleanup all files: {e}")
