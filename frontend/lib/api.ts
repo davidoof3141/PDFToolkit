@@ -2,7 +2,7 @@
 export const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL!;
 
 if (!apiBase) {
-  // eslint-disable-next-line no-console
+   
   console.warn('NEXT_PUBLIC_API_BASE_URL is not defined');
 }
 
