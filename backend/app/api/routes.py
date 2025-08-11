@@ -1,7 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List
 import shutil
 import uuid
 from pathlib import Path
@@ -22,6 +22,7 @@ class PageInfo(BaseModel):
     source_pdf: str
     page_number: int
     unique_id: str
+    rotation: int = 0
 
 
 class CreatePDFRequest(BaseModel):
@@ -77,9 +78,7 @@ async def upload_pdf(file: UploadFile = File(...)):
             }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Could not upload file: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Could not upload file: {e}")
     finally:
         file.file.close()
 
@@ -99,14 +98,13 @@ async def create_pdf(request: CreatePDFRequest):
                 "source_pdf": page.source_pdf,
                 "page_number": page.page_number,
                 "unique_id": page.unique_id,
+                "rotation": page.rotation,
             }
             for page in request.pages
         ]
 
         # Create the PDF
-        result = PDFService.create_pdf_from_pages(
-            page_order, output_path, UPLOAD_DIR
-        )
+        result = PDFService.create_pdf_from_pages(page_order, output_path, UPLOAD_DIR)
 
         return {
             "message": "PDF created successfully",
@@ -117,9 +115,7 @@ async def create_pdf(request: CreatePDFRequest):
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Could not create PDF: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Could not create PDF: {e}")
 
 
 @router.get("/download/{result_id}", tags=["pdf"])
@@ -128,24 +124,22 @@ async def download_pdf(result_id: str):
     try:
         # Find the file with the result_id prefix
         matching_files = list(OUTPUT_DIR.glob(f"{result_id}_*"))
-        
+
         if not matching_files:
             raise HTTPException(status_code=404, detail="PDF not found")
-        
+
         file_path = matching_files[0]
-        
+
         return FileResponse(
             path=file_path,
             media_type="application/pdf",
             filename=file_path.name,
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Could not download PDF: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Could not download PDF: {e}")
 
 
 @router.get("/result/{result_id}", tags=["pdf"])
@@ -154,13 +148,13 @@ async def get_pdf_result(result_id: str):
     try:
         # Find the file with the result_id prefix
         matching_files = list(OUTPUT_DIR.glob(f"{result_id}_*"))
-        
+
         if not matching_files:
             raise HTTPException(status_code=404, detail="PDF not found")
-        
+
         file_path = matching_files[0]
         file_stats = file_path.stat()
-        
+
         return {
             "result_id": result_id,
             "filename": file_path.name,
@@ -168,10 +162,8 @@ async def get_pdf_result(result_id: str):
             "created_at": file_stats.st_ctime,
             "download_url": f"/api/download/{result_id}",
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Could not get PDF info: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Could not get PDF info: {e}")

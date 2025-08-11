@@ -111,6 +111,7 @@ class PDFService:
                 source_filename = page_info.get("source_pdf")
                 # Convert to 0-based index
                 page_number = page_info.get("page_number", 1) - 1
+                rotation = page_info.get("rotation", 0)
 
                 source_path = uploads_dir / source_filename
                 if not source_path.exists():
@@ -122,14 +123,19 @@ class PDFService:
                 if page_number >= source_doc.page_count:
                     source_doc.close()
                     raise Exception(
-                        f"Page {page_number + 1} not found in "
-                        f"{source_filename}"
+                        f"Page {page_number + 1} not found in " f"{source_filename}"
                     )
 
                 # Insert the page into the new document
                 new_doc.insert_pdf(
                     source_doc, from_page=page_number, to_page=page_number
                 )
+
+                # Get the newly inserted page and apply rotation if needed
+                if rotation != 0:
+                    new_page = new_doc[-1]  # Get the last inserted page
+                    new_page.set_rotation(rotation)
+
                 source_doc.close()
 
             # Save the new PDF

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface PdfResult {
@@ -12,12 +12,13 @@ interface PdfResult {
 }
 
 interface PdfResultPageProps {
-  params: {
+  params: Promise<{
     resultId: string;
-  };
+  }>;
 }
 
 export default function PdfResultPage({ params }: PdfResultPageProps) {
+  const resolvedParams = use(params);
   const [result, setResult] = useState<PdfResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +30,7 @@ export default function PdfResultPage({ params }: PdfResultPageProps) {
     const fetchResult = async () => {
       try {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/result/${params.resultId}`
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/result/${resolvedParams.resultId}`
         );
 
         if (!response.ok) {
@@ -41,7 +42,7 @@ export default function PdfResultPage({ params }: PdfResultPageProps) {
 
         // Create PDF blob URL for viewing
         const pdfResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/download/${params.resultId}`
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/download/${resolvedParams.resultId}`
         );
 
         if (pdfResponse.ok) {
@@ -63,7 +64,7 @@ export default function PdfResultPage({ params }: PdfResultPageProps) {
     return () => {
       // This cleanup will run when the component unmounts
     };
-  }, [params.resultId]);
+  }, [resolvedParams.resultId]);
 
   // Separate useEffect for cleanup
   useEffect(() => {
@@ -133,7 +134,7 @@ export default function PdfResultPage({ params }: PdfResultPageProps) {
             <p className="text-gray-600 mb-6">{error || 'PDF result not found'}</p>
             <button
               onClick={() => router.push('/')}
-              className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              className="px-6 py-2 bg-sky-400 text-white rounded-md hover:bg-sky-500 transition-colors"
             >
               Back to Home
             </button>
@@ -201,7 +202,7 @@ export default function PdfResultPage({ params }: PdfResultPageProps) {
                 <div className="pt-4 space-y-3">
                   <button
                     onClick={handleDownload}
-                    className="w-full px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
+                    className="w-full px-4 py-3 bg-sky-400 text-white rounded-md hover:bg-sky-500 transition-colors font-medium flex items-center justify-center gap-2"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
@@ -211,7 +212,7 @@ export default function PdfResultPage({ params }: PdfResultPageProps) {
 
                   <button
                     onClick={() => router.push('/')}
-                    className="w-full px-4 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
+                    className="w-full px-4 py-3 bg-emerald-400 text-white rounded-md hover:bg-emerald-500 transition-colors font-medium flex items-center justify-center gap-2"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3" />
@@ -227,7 +228,7 @@ export default function PdfResultPage({ params }: PdfResultPageProps) {
         {/* Floating Minimize/Expand button */}
         <button
           onClick={() => setIsSidebarMinimized(!isSidebarMinimized)}
-          className="fixed right-4 top-1/2 transform -translate-y-1/2 z-20 p-3 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-700 transition-all duration-300"
+          className="fixed right-4 top-1/2 transform -translate-y-1/2 z-20 p-3 bg-slate-500 text-white rounded-full shadow-lg hover:bg-slate-600 transition-all duration-300"
           title={isSidebarMinimized ? 'Expand sidebar' : 'Minimize sidebar'}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

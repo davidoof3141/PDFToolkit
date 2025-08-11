@@ -41,6 +41,8 @@ export default function PdfUpload() {
   const [draggedPageId, setDraggedPageId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'pages' | 'files'>('pages');
   const [draggedPdfIndex, setDraggedPdfIndex] = useState<number | null>(null);
+  const [pageRotations, setPageRotations] = useState<{ [key: string]: number }>({});
+  const [zoomedPageId, setZoomedPageId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -224,7 +226,8 @@ export default function PdfUpload() {
       const pages = allPages.map(page => ({
         source_pdf: page.source_pdf,
         page_number: page.page_number,
-        unique_id: page.unique_id
+        unique_id: page.unique_id,
+        rotation: pageRotations[page.unique_id] || 0
       }));
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/create-pdf`, {
@@ -276,29 +279,58 @@ export default function PdfUpload() {
     e.stopPropagation();
   };
 
+  const handleDeletePage = (pageId: string) => {
+    setAllPages(prev => prev.filter(page => page.unique_id !== pageId));
+    // Remove rotation data for deleted page
+    setPageRotations(prev => {
+      const newRotations = { ...prev };
+      delete newRotations[pageId];
+      return newRotations;
+    });
+    // Close zoom if this page was zoomed
+    if (zoomedPageId === pageId) {
+      setZoomedPageId(null);
+    }
+  };
+
+  const handleRotatePage = (pageId: string) => {
+    setPageRotations(prev => ({
+      ...prev,
+      [pageId]: ((prev[pageId] || 0) + 90) % 360
+    }));
+  };
+
+  const handleZoomPage = (pageId: string) => {
+    setZoomedPageId(pageId);
+  };
+
+  const handleCloseZoom = () => {
+    setZoomedPageId(null);
+  };
+
   return (
     <div className="p-6 max-w-5xl mx-auto bg-white rounded-xl shadow-md space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800">PDF Toolkit</h2>
+        <h2 className="text-2xl font-bold text-gray-800">PDF Upload</h2>
         <div className="flex items-center gap-4">
           {allPages.length > 0 && (
             <>
               <button
                 onClick={handleClearAll}
-                className="px-4 py-2 text-red-600 hover:text-red-800 border border-red-300 hover:border-red-500 rounded-md transition-colors"
+                className="px-4 py-2 text-rose-400 hover:text-rose-600 border border-rose-200 hover:border-rose-300 rounded-md transition-colors"
               >
                 Clear All
               </button>
             <button
               onClick={handleDropzoneClick}
-              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-md transition-colors"
+              className="px-4 py-2 bg-sky-400 text-white hover:bg-sky-500 rounded-md transition-colors"
             >
               Add Another PDF
             </button>
               <button
                 onClick={handleSubmit}
                 disabled={isSubmitting || allPages.length === 0}
-                className="px-6 py-2 bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-md transition-colors font-medium"
+                className="px-6 py-2 bg-emerald-400 text-white hover:bg-emerald-500 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-md transition-colors font-medium"
               >
                 {isSubmitting ? 'Creating PDF...' : 'Create PDF'}
               </button>
@@ -382,15 +414,70 @@ export default function PdfUpload() {
                     onDragStart={(e) => handleDragStart(e, page.unique_id)}
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, page.unique_id)}
-                    className={`border border-gray-200 rounded-lg p-2 cursor-move hover:shadow-lg transition-shadow
+                    className={`relative group border border-gray-200 rounded-lg p-2 cursor-move hover:shadow-lg transition-shadow
                       ${draggedPageId === page.unique_id ? 'opacity-50' : ''}
                       hover:border-blue-300`}
                   >
-                    <img
-                      src={page.image_data}
-                      alt={`Page ${page.page_number} from ${page.source_pdf}`}
-                      className="w-full h-auto rounded pointer-events-none"
-                    />
+                    {/* Page Image */}
+                    <div className="relative overflow-hidden rounded">
+                      <img
+                        src={page.image_data}
+                        alt={`Page ${page.page_number} from ${page.source_pdf}`}
+                        className="w-full h-auto rounded pointer-events-none transition-transform duration-300"
+                        style={{ 
+                          transform: `rotate(${pageRotations[page.unique_id] || 0}deg)` 
+                        }}
+                      />
+                      
+                      {/* Hover Controls Bar */}
+                      <div className="absolute top-0 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <div className="flex gap-1 bg-white bg-opacity-90 backdrop-blur-sm rounded-full px-2 py-1 shadow-lg">
+                          {/* Delete Button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeletePage(page.unique_id);
+                            }}
+                            className="p-1.5 bg-rose-400 hover:bg-rose-500 text-white rounded-full transition-colors"
+                            title="Delete page"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                          
+                          {/* Rotate Button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRotatePage(page.unique_id);
+                            }}
+                            className="p-1.5 bg-sky-400 hover:bg-sky-500 text-white rounded-full transition-colors"
+                            title="Rotate page"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                          </button>
+                          
+                          {/* Zoom Button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleZoomPage(page.unique_id);
+                            }}
+                            className="p-1.5 bg-emerald-400 hover:bg-emerald-500 text-white rounded-full transition-colors"
+                            title="Zoom page"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Page Info */}
                     <div className="text-xs text-center text-gray-600 mt-2 space-y-1">
                       <p>Page {page.page_number}</p>
                       <p className="truncate text-gray-500">{page.source_pdf}</p>
@@ -400,7 +487,7 @@ export default function PdfUpload() {
               </div>
               
               <p className="text-xs text-gray-500 text-center">
-                Drag pages to reorder them. Click "Add Another PDF" to upload more files.
+                Drag pages to reorder them. Hover over pages for delete, rotate, and zoom options.
               </p>
             </>
           ) : (
@@ -432,10 +519,13 @@ export default function PdfUpload() {
                     {/* Remove button */}
                     <button
                       onClick={() => handleRemoveFile(pdf.filename)}
-                      className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                      className="absolute top-1 right-1 p-1 bg-rose-400 text-white rounded-full hover:bg-rose-500 transition-colors opacity-0 group-hover:opacity-100"
                       aria-label={`Remove ${pdf.filename}`}
+                      title="Delete PDF"
                     >
-                      ×
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
                     </button>
                   </div>
                 ))}
@@ -456,6 +546,37 @@ export default function PdfUpload() {
       )}
 
       {error && <p className="text-red-500 text-sm">{error}</p>}
+
+      {/* Zoom Modal */}
+      {zoomedPageId && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-75 flex items-center justify-center p-4" onClick={handleCloseZoom}>
+          <div className="relative max-w-4xl max-h-full">
+            <button
+              onClick={handleCloseZoom}
+              className="absolute top-4 right-4 z-10 p-2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white rounded-full transition-colors"
+              title="Close zoom"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            {(() => {
+              const zoomedPage = allPages.find(page => page.unique_id === zoomedPageId);
+              return zoomedPage ? (
+                <img
+                  src={zoomedPage.image_data}
+                  alt={`Zoomed Page ${zoomedPage.page_number} from ${zoomedPage.source_pdf}`}
+                  className="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-transform duration-300"
+                  style={{ 
+                    transform: `rotate(${pageRotations[zoomedPage.unique_id] || 0}deg)` 
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : null;
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
