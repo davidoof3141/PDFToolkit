@@ -1,5 +1,5 @@
 import PdfUpload from './components/PdfUpload';
-import { Playwrite_AU_QLD, Geist } from "next/font/google";
+import { Playwrite_AU_QLD } from "next/font/google";
 import Image from "next/image";
 
 const playwrite = Playwrite_AU_QLD({

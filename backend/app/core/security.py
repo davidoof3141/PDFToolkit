@@ -12,6 +12,7 @@ security = HTTPBearer()
 
 def verify_api_key(x_api_key: Optional[str] = Header(None)) -> bool:
     """Verify API key for general endpoints."""
+    print(x_api_key)
     if not x_api_key:
         raise HTTPException(
             status_code=401,

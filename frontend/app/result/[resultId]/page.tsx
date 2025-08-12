@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
+import { api, apiBlob } from '../../../lib/api';
 
 interface PdfResult {
   result_id: string;
@@ -29,30 +30,17 @@ export default function PdfResultPage({ params }: PdfResultPageProps) {
   useEffect(() => {
     const fetchResult = async () => {
       try {
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/result/${resolvedParams.resultId}`
-        );
-
-        if (!response.ok) {
-          throw new Error('PDF result not found');
-        }
-
-        const data = await response.json();
+        const data = await api<PdfResult>(`/result/${resolvedParams.resultId}`);
         setResult(data);
 
         // Create PDF blob URL for viewing
-        const pdfResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/download/${resolvedParams.resultId}`
-        );
+        const blob = await apiBlob(`/download/${resolvedParams.resultId}`);
+        const url = window.URL.createObjectURL(blob);
+        setPdfUrl(url);
 
-        if (pdfResponse.ok) {
-          const blob = await pdfResponse.blob();
-          const url = window.URL.createObjectURL(blob);
-          setPdfUrl(url);
-        }
-
-      } catch (err: any) {
-        setError(err.message || 'Failed to load PDF result');
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to load PDF result';
+        setError(message);
       } finally {
         setIsLoading(false);
       }
@@ -79,15 +67,7 @@ export default function PdfResultPage({ params }: PdfResultPageProps) {
     if (!result) return;
 
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/download/${result.result_id}`
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to download PDF');
-      }
-
-      const blob = await response.blob();
+      const blob = await apiBlob(`/download/${result.result_id}`);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -96,8 +76,9 @@ export default function PdfResultPage({ params }: PdfResultPageProps) {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-    } catch (err: any) {
-      setError(err.message || 'Failed to download PDF');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to download PDF';
+      setError(message);
     }
   };
 

@@ -2,6 +2,8 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import { uploadFile, api } from '../../lib/api';
 
 interface PageData {
   page_number: number;
@@ -12,29 +14,30 @@ interface PageData {
   unique_id: string;
 }
 
+interface PdfInfo {
+  page_count: number;
+  metadata: Record<string, unknown> | null;
+  filename: string;
+}
+
 interface PdfData {
   filename: string;
-  pdf_info: {
-    page_count: number;
-    metadata: any;
-    filename: string;
-  };
+  pdf_info: PdfInfo;
   pages: PageData[];
 }
 
 interface UploadResponse {
   message: string;
   filename: string;
-  pdf_info?: any;
+  pdf_info?: PdfInfo;
   pages?: PageData[];
   error?: string;
 }
 
 export default function PdfUpload() {
   const [allPages, setAllPages] = useState<PageData[]>([]);
-  const [uploadedPdfs, setUploadedPdfs] = useState<string[]>([]);
   const [uploadedPdfsData, setUploadedPdfsData] = useState<PdfData[]>([]);
-  const [isUploading, setIsUploading] = useState(false);5555
+  const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -55,25 +58,13 @@ export default function PdfUpload() {
     setIsUploading(true);
     setError(null);
 
-    const formData = new FormData();
-    formData.append('file', selectedFile);
-
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/upload`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ detail: 'An unknown error occurred' }));
-        throw new Error(errorData.detail || `HTTP error! status: ${res.status}`);
-      }
-
-      const data: UploadResponse = await res.json();
+      console.log(process.env.NEXT_PUBLIC_API_BASE_URL);
+      const data = await uploadFile<UploadResponse>('/upload', selectedFile);
       
       if (data.pages && data.pdf_info) {
         // Add unique IDs to pages and source PDF information
-        const pagesWithIds: PageData[] = data.pages.map((page, index) => ({
+  const pagesWithIds: PageData[] = data.pages.map((page: PageData, index: number) => ({
           ...page,
           source_pdf: data.filename,
           unique_id: `${data.filename}-page-${page.page_number}-${Date.now()}-${index}`
@@ -87,14 +78,14 @@ export default function PdfUpload() {
         };
         
         setAllPages(prev => [...prev, ...pagesWithIds]);
-        setUploadedPdfs(prev => [...prev, data.filename]);
         setUploadedPdfsData(prev => [...prev, newPdfData]);
       } else if (data.error) {
         setError(`Upload successful but processing failed: ${data.error}`);
       }
       
-    } catch (err: any) {
-      setError(err.message || 'Upload failed. Please try again.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Upload failed. Please try again.';
+      setError(message);
     } finally {
       setIsUploading(false);
     }
@@ -111,7 +102,6 @@ export default function PdfUpload() {
 
   const handleRemoveFile = (filename: string) => {
     setAllPages(prev => prev.filter(page => page.source_pdf !== filename));
-    setUploadedPdfs(prev => prev.filter(pdf => pdf !== filename));
     setUploadedPdfsData(prev => prev.filter(pdf => pdf.filename !== filename));
     setError(null);
     if (fileInputRef.current) {
@@ -121,7 +111,6 @@ export default function PdfUpload() {
 
   const handleClearAll = () => {
     setAllPages([]);
-    setUploadedPdfs([]);
     setUploadedPdfsData([]);
     setError(null);
     if (fileInputRef.current) {
@@ -174,14 +163,6 @@ export default function PdfUpload() {
         return newPdfs;
       });
       
-      // Reorder PDF filenames array
-      setUploadedPdfs(prev => {
-        const newFilenames = [...prev];
-        const [draggedFilename] = newFilenames.splice(draggedPdfIndex, 1);
-        newFilenames.splice(targetPdfIndex, 0, draggedFilename);
-        return newFilenames;
-      });
-      
       // Reorder all pages to match the new PDF order
       setAllPages(prev => {
         const newPdfsOrder = [...uploadedPdfsData];
@@ -230,29 +211,23 @@ export default function PdfUpload() {
         rotation: pageRotations[page.unique_id] || 0
       }));
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/create-pdf`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          pages,
-          filename: 'merged_document.pdf'
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'An unknown error occurred' }));
-        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
+      const result = await api<{ result_id: string }>(
+        '/create-pdf',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            pages,
+            filename: 'merged_document.pdf'
+          }),
+        }
+      );
       
       // Redirect to result page
       router.push(`/result/${result.result_id}`);
       
-    } catch (err: any) {
-      setError(err.message || 'Failed to create PDF. Please try again.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create PDF. Please try again.';
+      setError(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -420,13 +395,16 @@ export default function PdfUpload() {
                   >
                     {/* Page Image */}
                     <div className="relative overflow-hidden rounded">
-                      <img
+                      <Image
                         src={page.image_data}
                         alt={`Page ${page.page_number} from ${page.source_pdf}`}
+                        width={page.width}
+                        height={page.height}
                         className="w-full h-auto rounded pointer-events-none transition-transform duration-300"
                         style={{ 
                           transform: `rotate(${pageRotations[page.unique_id] || 0}deg)` 
                         }}
+                        unoptimized
                       />
                       
                       {/* Hover Controls Bar */}
@@ -505,10 +483,13 @@ export default function PdfUpload() {
                       ${draggedPdfIndex === pdfIndex ? 'opacity-50' : ''}`}
                   >
                     {/* Show first page image */}
-                    <img
-                      src={pdf.pages[0]?.image_data}
+                    <Image
+                      src={pdf.pages[0]?.image_data || ''}
                       alt={`First page of ${pdf.filename}`}
+                      width={pdf.pages[0]?.width || 100}
+                      height={pdf.pages[0]?.height || 140}
                       className="w-full h-auto rounded"
+                      unoptimized
                     />
                     <div className="text-xs text-center text-gray-600 mt-2 space-y-1">
                       <p className="font-medium truncate">{pdf.filename}</p>
@@ -563,14 +544,17 @@ export default function PdfUpload() {
             {(() => {
               const zoomedPage = allPages.find(page => page.unique_id === zoomedPageId);
               return zoomedPage ? (
-                <img
+                <Image
                   src={zoomedPage.image_data}
                   alt={`Zoomed Page ${zoomedPage.page_number} from ${zoomedPage.source_pdf}`}
+                  width={zoomedPage.width}
+                  height={zoomedPage.height}
                   className="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-transform duration-300"
                   style={{ 
                     transform: `rotate(${pageRotations[zoomedPage.unique_id] || 0}deg)` 
                   }}
                   onClick={(e) => e.stopPropagation()}
+                  unoptimized
                 />
               ) : null;
             })()}

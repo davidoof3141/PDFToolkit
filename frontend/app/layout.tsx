@@ -1,15 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Playwrite_AU_QLD, Geist } from "next/font/google";
-import Image from "next/image";
-
-const playwrite = Playwrite_AU_QLD({
-  variable: "--font-playwrite",
-});
-
-const geist = Geist({
-  subsets: ['latin'],
-})
 
 export const metadata: Metadata = {
   title: "PDF Toolkit",
