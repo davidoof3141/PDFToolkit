@@ -59,12 +59,11 @@ export default function PdfUpload() {
     setError(null);
 
     try {
-      console.log(process.env.NEXT_PUBLIC_API_BASE_URL);
       const data = await uploadFile<UploadResponse>('/upload', selectedFile);
       
       if (data.pages && data.pdf_info) {
         // Add unique IDs to pages and source PDF information
-  const pagesWithIds: PageData[] = data.pages.map((page: PageData, index: number) => ({
+          const pagesWithIds: PageData[] = data.pages.map((page: PageData, index: number) => ({
           ...page,
           source_pdf: data.filename,
           unique_id: `${data.filename}-page-${page.page_number}-${Date.now()}-${index}`
